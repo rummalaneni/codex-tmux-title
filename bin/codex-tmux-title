@@ -11,8 +11,7 @@ Usage:
 Renames the current tmux window to the current Codex thread title.
 
 Intended use is as a Codex SessionStart and Stop hook. Hook JSON is read from
-stdin. Outside hooks, CODEX_THREAD_ID and the current directory are used as
-fallbacks.
+stdin. Outside hooks, CODEX_THREAD_ID can be used to look up the title.
 EOF
 }
 
@@ -80,12 +79,6 @@ title_from_session_index() {
     'select(.id == $id) | .thread_name // empty' "$index" 2>/dev/null | tail -n 1
 }
 
-fallback_title_from_cwd() {
-  cwd="$1"
-  [ -n "$cwd" ] || cwd="$(pwd)"
-  basename "$cwd"
-}
-
 sanitize_title() {
   awk '
     BEGIN { max = 60 }
@@ -119,24 +112,17 @@ resolve_title() {
   read_hook_json
 
   thread_id="$(json_get session_id)"
-  cwd="$(json_get cwd)"
 
   if [ -z "$thread_id" ]; then
     thread_id="${CODEX_THREAD_ID:-}"
   fi
-  if [ -z "$cwd" ]; then
-    cwd="${PWD:-}"
-  fi
 
-  title="$(title_from_sqlite "$thread_id" || true)"
+  title="$(title_from_session_index "$thread_id" || true)"
   if [ -z "$title" ]; then
-    title="$(title_from_session_index "$thread_id" || true)"
+    title="$(title_from_sqlite "$thread_id" || true)"
   fi
   if [ -z "$title" ] && [ -n "$thread_id" ]; then
     title="$thread_id"
-  fi
-  if [ -z "$title" ]; then
-    title="$(fallback_title_from_cwd "$cwd")"
   fi
 
   printf '%s\n' "$title" | sanitize_title

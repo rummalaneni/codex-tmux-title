@@ -42,7 +42,7 @@ output="$(
   CODEX_SESSION_INDEX="$FIXTURES/session_index.jsonl" \
   "$BIN" --print < "$FIXTURES/hook-stop.json"
 )"
-assert_eq "uses sqlite title first" "SQLite title wins" "$output"
+assert_eq "uses session index title first" "Build tmux naming hook" "$output"
 
 CONTROL_DB="$TMP_DIR/control.sqlite"
 sqlite3 "$CONTROL_DB" \
@@ -51,10 +51,10 @@ sqlite3 "$CONTROL_DB" \
 
 output="$(
   CODEX_STATE_DB="$CONTROL_DB" \
-  CODEX_SESSION_INDEX="$FIXTURES/session_index.jsonl" \
+  CODEX_SESSION_INDEX="$TMP_DIR/missing.jsonl" \
   "$BIN" --print < "$FIXTURES/hook-stop.json"
 )"
-assert_eq "strips control characters from title" "Bad Title" "$output"
+assert_eq "uses sanitized sqlite title when session index is missing" "Bad Title" "$output"
 
 output="$(
   CODEX_STATE_DB="$TMP_DIR/missing.sqlite" \
@@ -83,7 +83,7 @@ output="$(
   CODEX_THREAD_ID= \
   "$BIN" --print < "$TMP_DIR/no-session-id.json"
 )"
-assert_eq "falls back to cwd basename without session id" "project" "$output"
+assert_eq "does not fall back to cwd without session id" "" "$output"
 
 output="$(
   CODEX_STATE_DB="$TMP_DIR/missing.sqlite" \

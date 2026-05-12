@@ -70,8 +70,9 @@ runs:
 tmux rename-window "$title"
 ```
 
-If the title cannot be found, it falls back to the Codex session index, then to
-the Codex session id, then to the current working directory name.
+If the title cannot be found in the Codex session index, it falls back to the
+Codex SQLite state, then to the Codex session id. If no session id is available,
+it exits successfully without renaming the window.
 
 The script exits successfully without doing anything when it is not running
 inside tmux.
