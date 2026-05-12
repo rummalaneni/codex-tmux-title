@@ -1,0 +1,25 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  shell-tests:
+    name: Shell tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies on Ubuntu
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y jq sqlite3
+      - name: Install dependencies on macOS
+        if: runner.os == 'macOS'
+        run: brew install jq sqlite
+      - name: Run tests
+        run: ./test/run-tests.sh

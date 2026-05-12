@@ -1,0 +1,163 @@
+#!/usr/bin/env sh
+set -eu
+
+VERSION="0.1.0"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  codex-tmux-title [--print|--dry-run|--help|--version]
+
+Renames the current tmux window to the current Codex thread title.
+
+Intended use is as a Codex SessionStart and Stop hook. Hook JSON is read from
+stdin. Outside hooks, CODEX_THREAD_ID and the current directory are used as
+fallbacks.
+EOF
+}
+
+mode="rename"
+case "${1:-}" in
+  --print)
+    mode="print"
+    ;;
+  --dry-run)
+    mode="dry-run"
+    ;;
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  --version)
+    printf '%s\n' "$VERSION"
+    exit 0
+    ;;
+  "")
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac
+
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+json_get() {
+  key="$1"
+  if [ -n "${HOOK_JSON:-}" ] && command_exists jq; then
+    printf '%s' "$HOOK_JSON" | jq -r --arg key "$key" '.[$key] // empty' 2>/dev/null || true
+  fi
+}
+
+sql_quote() {
+  printf "%s" "$1" | sed "s/'/''/g"
+}
+
+title_from_sqlite() {
+  thread_id="$1"
+  db="${CODEX_STATE_DB:-${CODEX_HOME:-$HOME/.codex}/state_5.sqlite}"
+
+  [ -n "$thread_id" ] || return 1
+  [ -r "$db" ] || return 1
+  command_exists sqlite3 || return 1
+
+  quoted_id=$(sql_quote "$thread_id")
+  sqlite3 -cmd '.timeout 100' "$db" \
+    "select title from threads where id = '$quoted_id' limit 1;" 2>/dev/null || true
+}
+
+title_from_session_index() {
+  thread_id="$1"
+  index="${CODEX_SESSION_INDEX:-${CODEX_HOME:-$HOME/.codex}/session_index.jsonl}"
+
+  [ -n "$thread_id" ] || return 1
+  [ -r "$index" ] || return 1
+  command_exists jq || return 1
+
+  jq -r --arg id "$thread_id" \
+    'select(.id == $id) | .thread_name // empty' "$index" 2>/dev/null | tail -n 1
+}
+
+fallback_title_from_cwd() {
+  cwd="$1"
+  [ -n "$cwd" ] || cwd="$(pwd)"
+  basename "$cwd"
+}
+
+sanitize_title() {
+  awk '
+    BEGIN { max = 60 }
+    {
+      gsub(/[\001-\010\013\014\016-\037\177]/, "")
+      gsub(/\^[][@A-Z\\^_?]/, "")
+      gsub(/[\r\n\t]+/, " ")
+      gsub(/[ ]+/, " ")
+      gsub(/^ /, "")
+      gsub(/ $/, "")
+      gsub(/:/, "-")
+      if (length($0) > max) {
+        print substr($0, 1, max)
+      } else {
+        print
+      }
+      exit
+    }
+  '
+}
+
+read_hook_json() {
+  if [ -t 0 ]; then
+    return 0
+  fi
+  HOOK_JSON="$(cat)"
+  export HOOK_JSON
+}
+
+resolve_title() {
+  read_hook_json
+
+  thread_id="$(json_get session_id)"
+  cwd="$(json_get cwd)"
+
+  if [ -z "$thread_id" ]; then
+    thread_id="${CODEX_THREAD_ID:-}"
+  fi
+  if [ -z "$cwd" ]; then
+    cwd="${PWD:-}"
+  fi
+
+  title="$(title_from_sqlite "$thread_id" || true)"
+  if [ -z "$title" ]; then
+    title="$(title_from_session_index "$thread_id" || true)"
+  fi
+  if [ -z "$title" ] && [ -n "$thread_id" ]; then
+    title="$thread_id"
+  fi
+  if [ -z "$title" ]; then
+    title="$(fallback_title_from_cwd "$cwd")"
+  fi
+
+  printf '%s\n' "$title" | sanitize_title
+}
+
+title="$(resolve_title)"
+[ -n "$title" ] || exit 0
+
+case "$mode" in
+  print)
+    printf '%s\n' "$title"
+    exit 0
+    ;;
+  dry-run)
+    printf 'tmux rename-window %s\n' "$title"
+    exit 0
+    ;;
+esac
+
+[ -n "${TMUX:-}" ] || exit 0
+command_exists tmux || exit 0
+
+tmux rename-window "$title" >/dev/null 2>&1 || true
+exit 0

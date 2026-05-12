@@ -1,0 +1,10 @@
+{
+  "session_id": "019e1e2a-1feb-7060-aa12-95951d63649a",
+  "transcript_path": "/Users/example/.codex/sessions/rollout.jsonl",
+  "cwd": "/Users/example/dev/project",
+  "hook_event_name": "Stop",
+  "model": "gpt-5.5",
+  "turn_id": "turn-1",
+  "stop_hook_active": false,
+  "last_assistant_message": "Done"
+}
