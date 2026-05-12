@@ -8,14 +8,14 @@ the active Codex thread.
 
 ## Requirements
 
-- Codex with lifecycle hooks enabled
+- Codex with lifecycle hooks enabled: `[features] hooks = true`
 - tmux
 - `jq`
 - `sqlite3`
 
 ## Install
 
-Clone the repository and put `bin/` on your `PATH`:
+Clone the repository and put `bin/` on your `PATH` for manual testing:
 
 ```sh
 git clone https://github.com/rummalaneni/codex-tmux-title.git
@@ -32,25 +32,44 @@ install -m 0755 bin/codex-tmux-title ~/.local/bin/codex-tmux-title
 
 ## Codex Hook Setup
 
-Add this to `~/.codex/config.toml` or a trusted project `.codex/config.toml`:
+Enable Codex hooks in `~/.codex/config.toml`:
 
 ```toml
 [features]
-codex_hooks = true
+hooks = true
+```
 
-[[hooks.SessionStart]]
-matcher = "startup|resume"
+Then add the command hook to `~/.codex/hooks.json` or a trusted project
+`.codex/hooks.json`:
 
-[[hooks.SessionStart.hooks]]
-type = "command"
-command = "/Users/alice/.local/bin/codex-tmux-title"
-timeout = 2
-
-[[hooks.Stop]]
-[[hooks.Stop.hooks]]
-type = "command"
-command = "/Users/alice/.local/bin/codex-tmux-title"
-timeout = 2
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/alice/.local/bin/codex-tmux-title",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/alice/.local/bin/codex-tmux-title",
+            "timeout": 2
+          }
+        ]
+      }
+    ]
+  }
+}
 ```
 
 Replace `/Users/alice/.local/bin/codex-tmux-title` with the absolute path
@@ -59,6 +78,11 @@ different command with the same name from `PATH`.
 
 `SessionStart` names the window when a thread starts or resumes. `Stop` updates
 it again after each turn, once Codex may have generated or changed the title.
+There is no separate Codex hook that fires at the instant a thread title changes.
+
+Codex hooks are the lifecycle feature. `codex-tmux-title` is the command those
+hooks run. You need both pieces: hooks enabled in Codex and a hook entry pointing
+to this script.
 
 ## How It Works
 
@@ -70,9 +94,16 @@ runs:
 tmux rename-window "$title"
 ```
 
-If the title cannot be found in the Codex session index, it falls back to the
-Codex SQLite state, then to the Codex session id. If no session id is available,
-it exits successfully without renaming the window.
+Title resolution order:
+
+1. Thread name from `session_index.jsonl`.
+2. Thread title from the Codex SQLite state database.
+3. Codex `session_id`.
+4. No rename when no session id is available.
+
+The script intentionally does not fall back to the working directory, project
+name, or previous tmux window name. If Codex has not generated a title yet, the
+window should show the session id.
 
 The script exits successfully without doing anything when it is not running
 inside tmux.
@@ -91,6 +122,23 @@ Show the tmux command that would run:
 codex-tmux-title --dry-run < test/fixtures/hook-stop.json
 ```
 
+Run the test suite:
+
+```sh
+./test/run-tests.sh
+```
+
+### Why Did The Title Not Change?
+
+- Start or resume Codex inside tmux, or complete one turn. Editing config does
+  not trigger the hook by itself.
+- Check that `[features] hooks = true` is in the active Codex config.
+- Check that the hook command path is absolute and points to the installed
+  script, not only to a command name on `PATH`.
+- If Codex has no title yet, expect the session id. This is the intentional
+  fallback.
+- A title change may not appear until the next `Stop` event or a later resume.
+
 ## Environment
 
 These variables are optional and mainly useful for tests:
@@ -108,6 +156,11 @@ These variables are optional and mainly useful for tests:
 - Read-only Codex metadata access.
 - Silent success on missing tmux, missing Codex state, or transient failures.
 - Short hook timeout recommended: `2` seconds.
+- Untrusted title text is sanitized and passed as one `tmux` argument, not
+  evaluated as shell syntax.
+- Keep project-local or untrusted directories out of the front of the hook
+  process `PATH`; helper tools such as `jq`, `sqlite3`, and `tmux` are resolved
+  from `PATH`.
 
 ## Coding Agents
 
