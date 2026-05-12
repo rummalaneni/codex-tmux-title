@@ -88,6 +88,15 @@ assert_eq "does not fall back to cwd without session id" "" "$output"
 output="$(
   CODEX_STATE_DB="$TMP_DIR/missing.sqlite" \
   CODEX_SESSION_INDEX="$FIXTURES/session_index.jsonl" \
+  TMUX_PANE= \
   "$BIN" --dry-run < "$FIXTURES/hook-stop.json"
 )"
 assert_eq "dry run prints rename command" "tmux rename-window Build tmux naming hook" "$output"
+
+output="$(
+  CODEX_STATE_DB="$TMP_DIR/missing.sqlite" \
+  CODEX_SESSION_INDEX="$FIXTURES/session_index.jsonl" \
+  TMUX_PANE=%9 \
+  "$BIN" --dry-run < "$FIXTURES/hook-stop.json"
+)"
+assert_eq "dry run targets current tmux pane when available" "tmux rename-window -t %9 Build tmux naming hook" "$output"

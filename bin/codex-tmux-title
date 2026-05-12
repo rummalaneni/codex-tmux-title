@@ -137,7 +137,11 @@ case "$mode" in
     exit 0
     ;;
   dry-run)
-    printf 'tmux rename-window %s\n' "$title"
+    if [ -n "${TMUX_PANE:-}" ]; then
+      printf 'tmux rename-window -t %s %s\n' "$TMUX_PANE" "$title"
+    else
+      printf 'tmux rename-window %s\n' "$title"
+    fi
     exit 0
     ;;
 esac
@@ -145,5 +149,9 @@ esac
 [ -n "${TMUX:-}" ] || exit 0
 command_exists tmux || exit 0
 
-tmux rename-window "$title" >/dev/null 2>&1 || true
+if [ -n "${TMUX_PANE:-}" ]; then
+  tmux rename-window -t "$TMUX_PANE" "$title" >/dev/null 2>&1 || true
+else
+  tmux rename-window "$title" >/dev/null 2>&1 || true
+fi
 exit 0

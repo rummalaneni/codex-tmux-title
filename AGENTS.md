@@ -36,7 +36,7 @@ enabled and a hook entry that points at the installed script.
 The intended hook events are:
 
 - `SessionStart`: name the tmux window on startup or resume.
-- `Stop`: update the tmux window after each completed turn.
+- `UserPromptSubmit`: update the tmux window when the user submits a prompt.
 
 Recommended `~/.codex/hooks.json` shape:
 
@@ -55,7 +55,7 @@ Recommended `~/.codex/hooks.json` shape:
         ]
       }
     ],
-    "Stop": [
+    "UserPromptSubmit": [
       {
         "hooks": [
           {
@@ -93,9 +93,10 @@ Do not fall back to the working directory, project name, or existing tmux window
 name. If there is no Codex title yet, the intended visible fallback is the
 session id.
 
-Codex currently provides lifecycle hooks for startup/resume and completed turns,
-not a dedicated "thread title changed" hook. A changed Codex title is reflected
-after the next matching hook event, usually `Stop`, or after a later resume.
+Codex currently provides lifecycle hooks such as startup/resume, prompt submit,
+and completed turn, not a dedicated "thread title changed" hook. A changed
+Codex title is reflected after the next matching hook event, usually
+`UserPromptSubmit`, or after a later resume.
 
 ## Safety Rules
 
@@ -120,7 +121,7 @@ After setup, verify:
 ./test/run-tests.sh
 ```
 
-For a live check, the user should start or resume Codex inside tmux, or complete
-one turn in an existing Codex thread. The window should become the Codex thread
-title after `SessionStart` or after the next completed turn. If the title has
-not been generated yet, the window should show the Codex session id.
+For a live check, the user should start or resume Codex inside tmux, or submit a
+prompt in an existing Codex thread. The window should become the Codex thread
+title after `SessionStart` or when `UserPromptSubmit` runs. If the title has not
+been generated yet, the window should show the Codex session id.
